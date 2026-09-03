@@ -1,0 +1,174 @@
+# ForgeAppHelp CI Pipeline
+# Lints and unit-tests the frontend, then runs E2E tests and generates
+# marketplace screenshots against the real built app.
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  unit:
+    name: Lint & Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        # `npm ci` needs a lockfile; fall back so a freshly-generated template
+        # is not dead on arrival before its first commit of package-lock.json.
+        run: npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test --if-present
+
+  test:
+    name: E2E Tests & Screenshots
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: |
+          chmod +x ops/startup.sh
+          chmod +x scripts/*.sh
+
+      - name: Create output directories
+        run: |
+          mkdir -p artifacts/robot
+          mkdir -p marketplace/screenshots
+
+      - name: Run E2E tests (Docker)
+        run: ./scripts/test-e2e-docker.sh
+
+      - name: Generate screenshots (Docker)
+        run: ./scripts/screenshots-docker.sh
+
+      - name: Verify screenshots exist
+        run: |
+          echo "Checking for required screenshots..."
+          test -f marketplace/screenshots/01-home.png || (echo "Missing 01-home.png" && exit 1)
+          test -f marketplace/screenshots/02-primary-action.png || (echo "Missing 02-primary-action.png" && exit 1)
+          echo "All required screenshots present!"
+          ls -la marketplace/screenshots/
+
+      - name: Upload Robot reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: robot-reports
+          path: artifacts/robot/
+          retention-days: 14
+
+      - name: Upload screenshots
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: marketplace-screenshots
+          path: marketplace/screenshots/
+          retention-days: 14
+
+  validate-manifest:
+    name: Validate BUILDLY.yaml
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Validate YAML syntax
+        run: |
+          python3 -c "
+          import yaml
+          import sys
+
+          try:
+              with open('BUILDLY.yaml', 'r') as f:
+                  manifest = yaml.safe_load(f)
+
+              # Check required fields
+              required = ['id', 'name', 'description', 'version', 'license', 'frontend']
+              missing = [f for f in required if f not in manifest]
+
+              if missing:
+                  print(f'Missing required fields: {missing}')
+                  sys.exit(1)
+
+              fe = manifest['frontend']
+              for field in ('framework', 'build_dir'):
+                  if field not in fe:
+                      print(f'frontend.{field} is required')
+                      sys.exit(1)
+
+              print('BUILDLY.yaml is valid!')
+              print(f'  id: {manifest[\"id\"]}')
+              print(f'  name: {manifest[\"name\"]}')
+              print(f'  version: {manifest[\"version\"]}')
+              print(f'  framework: {fe[\"framework\"]}')
+
+          except yaml.YAMLError as e:
+              print(f'YAML syntax error: {e}')
+              sys.exit(1)
+          except Exception as e:
+              print(f'Validation error: {e}')
+              sys.exit(1)
+          "
+
+      - name: Check package.json and lockfile
+        run: |
+          echo "Checking frontend manifests..."
+          if [[ ! -f package.json ]]; then
+            echo "ERROR: package.json is required for a frontend submission"
+            exit 1
+          fi
+          if [[ ! -f package-lock.json && ! -f npm-shrinkwrap.json ]]; then
+            echo "ERROR: commit a lockfile so CI installs the tree you built against"
+            exit 1
+          fi
+          if [[ -d node_modules ]]; then
+            echo "ERROR: node_modules is committed - add it to .gitignore"
+            exit 1
+          fi
+          echo "Frontend manifests OK!"
+
+      - name: Check required UI hooks are present
+        run: |
+          echo "Checking data-testid hooks declared in BUILDLY.yaml..."
+          # The E2E suite fails on a missing hook too, but only after a full
+          # Docker build -- this names the offender in seconds.
+          missing=0
+          for hook in app-root primary-action panel; do
+            # example/ holds the demo host that carries the hooks; src/ is the
+            # published library and has no app shell of its own.
+            if grep -rq "$hook" src/ example/; then
+              echo "  found: $hook"
+            else
+              echo "  MISSING: $hook (declared in BUILDLY.yaml ui_hooks)"
+              missing=1
+            fi
+          done
+          exit $missing

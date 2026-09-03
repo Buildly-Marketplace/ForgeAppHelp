@@ -1,0 +1,6 @@
+# Robot Framework Browser (Playwright) dependencies
+# Pin versions for reproducibility
+
+robotframework==7.4.2
+robotframework-browser==20.0.0
+robotframework-browser-batteries==20.0.0

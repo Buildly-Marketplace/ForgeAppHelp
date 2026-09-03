@@ -1,0 +1,37 @@
+# ForgeAppHelp Docker Compose Configuration
+# Provides app and e2e services for development and CI
+
+services:
+  # Built frontend, served as static files by nginx
+  app:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile.app
+      args:
+        # Override if your framework does not build to dist/
+        BUILD_DIR: ${BUILD_DIR:-dist-demo}
+    ports:
+      - "${FORGE_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+
+  # E2E test runner (Robot Framework with Browser library)
+  e2e:
+    build:
+      context: ..
+      dockerfile: ops/Dockerfile.e2e
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      - BASE_URL=http://app:8000
+    volumes:
+      - ../tests/robot:/work/tests/robot:ro
+      - ../artifacts:/work/artifacts
+      - ../marketplace/screenshots:/work/marketplace/screenshots
+    command: ["robot", "--outputdir", "/work/artifacts", "/work/tests/robot/smoke.robot"]

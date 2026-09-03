@@ -1,0 +1,161 @@
+# BUILDLY.yaml - Marketplace Manifest
+# This file defines the metadata and validation requirements for
+# Buildly Marketplace submissions.
+
+# Required: Unique identifier for this template
+id: forge-app-help
+
+# Required: Display name shown in marketplace
+name: ForgeAppHelp
+
+# Required: Short description (max 160 chars)
+description: Drop-in issue reporting and in-app help that files to Buildly Labs, with logs, breadcrumbs and crash context attached
+
+# Required: Semantic version
+version: 1.0.0
+
+# Required: Template category
+category: component
+
+# Required: List of tags for discovery
+tags:
+  - component
+  - issue-reporting
+  - crash-reporting
+  - error-tracking
+  - support
+  - labs
+  - react
+  - react-native
+
+# Required: Author information
+author:
+  name: Buildly Marketplace
+  email: marketplace@buildly.io
+  url: https://buildly.io
+
+# Required: License identifier (SPDX)
+license: MIT
+
+# Required: Repository URL
+repository: https://github.com/Buildly-Marketplace/ForgeAppHelp
+
+# Required: Minimum supported versions
+#
+# python is listed because Robot Framework and Playwright -- the E2E RUNNER --
+# are Python tools. The application itself is pure JavaScript and never
+# imports them; the Docker test path removes the local requirement entirely.
+requirements:
+  node: ">=20"
+  npm: ">=10"
+  docker: ">=20.10"
+  python: ">=3.10"   # test runner only, not the app
+
+# -----------------------------------------------------------------------------
+# Frontend
+# Which JS framework this submission uses, and where its build lands.
+# CI reads build_dir when assembling the static image.
+# -----------------------------------------------------------------------------
+
+frontend:
+  # One of: react | vue | angular | svelte | react-native-web | other
+  framework: react
+  # This repo is a LIBRARY plus a demo app. `npm run build` compiles the
+  # library to dist/ with tsc, then builds the demo with Vite -- so the
+  # servable static output is dist-demo, not dist.
+  build_dir: dist-demo
+  # npm scripts this template guarantees. Keep these names when you swap the
+  # framework -- ops/startup.sh, the Dockerfile and CI all call them.
+  scripts:
+    dev: npm run dev
+    build: npm run build
+    unit: npm test
+
+# -----------------------------------------------------------------------------
+# Test Commands
+# Marketplace CI will run these to validate submissions
+# -----------------------------------------------------------------------------
+
+tests:
+  # Docker-first mode (recommended, CI default)
+  docker:
+    e2e: ./scripts/test-e2e-docker.sh
+    screenshots: ./scripts/screenshots-docker.sh
+
+  # Node-first mode (optional, for local development)
+  node:
+    # Requires: ./ops/startup.sh start node
+    e2e: ./scripts/test-e2e-node.sh
+    screenshots: ./scripts/screenshots-node.sh
+    unit: npm test
+
+# -----------------------------------------------------------------------------
+# App Control
+# Single entrypoint for starting/stopping the application
+# -----------------------------------------------------------------------------
+
+app:
+  control: ./ops/startup.sh
+  modes:
+    - node
+    - docker
+  commands:
+    - start
+    - stop
+    - restart
+    - status
+
+# -----------------------------------------------------------------------------
+# Screenshots
+# Canonical screenshots for marketplace listing
+# Generated automatically by Robot Framework tests
+# -----------------------------------------------------------------------------
+
+screenshots:
+  directory: marketplace/screenshots
+  required:
+    - 01-home.png
+    - 02-primary-action.png
+  generator: ./scripts/screenshots-docker.sh
+
+# -----------------------------------------------------------------------------
+# Artifacts
+# Test outputs and reports
+# -----------------------------------------------------------------------------
+
+artifacts:
+  directory: artifacts
+  contents:
+    - robot/        # Robot Framework reports and logs
+
+# -----------------------------------------------------------------------------
+# UI Test Hooks
+# Required data-testid attributes for E2E tests
+# -----------------------------------------------------------------------------
+
+ui_hooks:
+  required:
+    - app-root          # Main application container
+    - primary-action    # Primary call-to-action button
+    - panel             # Content panel revealed by primary action
+
+# -----------------------------------------------------------------------------
+# Validation Rules
+# Criteria for marketplace acceptance
+# -----------------------------------------------------------------------------
+
+validation:
+  # All E2E tests must pass
+  tests_must_pass: true
+
+  # Required screenshots must exist after generation
+  screenshots_required: true
+
+  # BUILDLY.yaml must be valid
+  manifest_required: true
+
+  # A lockfile must be committed, so CI installs the same tree the author built
+  lockfile_required: true
+
+  # Every hook in ui_hooks.required must appear in the source
+  ui_hooks_required: true
