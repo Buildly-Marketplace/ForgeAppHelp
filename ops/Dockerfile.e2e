@@ -35,9 +35,14 @@ WORKDIR /work
 COPY tests/robot/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Initialize Browser library (downloads Playwright browsers)
-# Using robotframework-browser-batteries avoids npm dependency
-RUN rfbrowser init
+# Install the Playwright browser binaries.
+#
+# NOT `rfbrowser init`: that builds the library's Node wrapper and shells out
+# to npm, which this image does not have. robotframework-browser-batteries
+# exists precisely to avoid that -- it ships a prebuilt grpc_server binary, and
+# Browser skips the Node check entirely when it is installed. `install` fetches
+# only the browser binaries, which is all that is still missing.
+RUN rfbrowser install chromium
 
 # Set up working directory structure
 RUN mkdir -p /work/artifacts /work/marketplace/screenshots
