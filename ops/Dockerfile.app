@@ -14,8 +14,13 @@ LABEL description="ForgeAppHelp build stage"
 WORKDIR /app
 
 # Copy manifests first so the dependency layer caches across source edits.
+#
+# --ignore-scripts is required, not optional: this package's `prepare` script
+# compiles the library, and at this layer only the manifests exist -- src/ has
+# not been copied yet. Without it the install fails trying to build nothing.
 COPY package.json package-lock.json* ./
-RUN npm ci --no-audit --no-fund 2>/dev/null || npm install --no-audit --no-fund
+RUN npm ci --ignore-scripts --no-audit --no-fund 2>/dev/null \
+    || npm install --ignore-scripts --no-audit --no-fund
 
 COPY . .
 RUN npm run build
@@ -33,7 +38,13 @@ COPY ops/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget -q --spider http://localhost:8000/ || exit 1
+# curl is installed explicitly rather than relying on busybox wget: which
+# applets the nginx alpine image ships has changed between releases, and a
+# healthcheck that silently cannot run reports the container as unhealthy
+# forever while nginx itself is serving fine.
+RUN apk add --no-cache curl
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=5 \
+    CMD curl -fsS http://localhost:8000/ >/dev/null || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
