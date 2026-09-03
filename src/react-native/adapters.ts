@@ -48,8 +48,19 @@ export interface ReactNativePlatformOptions {
   os: string;
   /** Dimensions from react-native. */
   dimensions?: DimensionsLike;
-  /** Appearance.getColorScheme() result, or a getter for it. */
-  colorScheme?: 'light' | 'dark' | null | (() => 'light' | 'dark' | null);
+  /**
+   * Appearance.getColorScheme() result, or a getter for it.
+   *
+   * undefined is accepted as well as null because that is what React Native's
+   * ColorSchemeName actually is -- requiring null only forced every caller to
+   * write `?? null` around the real API.
+   */
+  colorScheme?:
+    | 'light'
+    | 'dark'
+    | null
+    | undefined
+    | (() => 'light' | 'dark' | null | undefined);
   /** NetInfo-backed connectivity getter, if the app has NetInfo. */
   getNetworkStatus?: () => string;
 }
