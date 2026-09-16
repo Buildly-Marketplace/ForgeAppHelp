@@ -91,6 +91,62 @@ Labs punchlist, tagged so triage can tell them apart.
 
 ---
 
+## Vanilla JS
+
+For a browser or webview app with no React — Tauri, Electron, a plain
+multi-page site. There is no component tree here to own a reporter instance
+the way `HelpProvider` does, so `createHelpClient` returns one for you to hold
+onto instead:
+
+```ts
+import { createHelpClient, HelpForm } from '@buildly/forge-app-help/vanilla';
+
+const reporter = createHelpClient({
+  productId: LABS_PRODUCT_ID,
+  apiKey: LABS_API_KEY,
+  appVersion: APP_VERSION,
+  buildNumber: BUILD_NUMBER,
+});
+
+const helpForm = new HelpForm({
+  reporter,
+  onSubmitted: (issueId) => console.log('filed', issueId),
+});
+
+document.getElementById('help-button')?.addEventListener('click', () => helpForm.open());
+```
+
+`createHelpClient` patches `console`, `fetch` and the global error handler
+immediately, the same as `HelpProvider` does on mount — call it once per app
+and keep the returned reporter around; calling it again drops the current log
+buffer and re-patches those globals. `stopHelpClient(reporter)` restores them.
+
+`HelpForm` is a real DOM modal — built with `document.createElement`, styled
+inline, no template strings for user-entered text — that behaves like the
+React version: same fields, same thank-you/error states, same `theme`/
+`baseTheme`/`audience` options (see Theming and Audience above; both apply
+here unchanged). `form.open()` inserts and shows it, `form.close()` hides and
+resets it, `form.destroy()` removes it from the document entirely.
+
+Storage defaults to an in-memory buffer that does not survive a reload. Pass
+`WebStorageAdapter` (backed by `localStorage`) so a crash's breadcrumbs are
+still there on the next launch:
+
+```ts
+import { createHelpClient, WebStorageAdapter, UniversalPlatformAdapter } from '@buildly/forge-app-help/vanilla';
+
+const reporter = createHelpClient(config, {
+  storage: new WebStorageAdapter(),
+  platform: new UniversalPlatformAdapter(),
+});
+```
+
+`UniversalPlatformAdapter` (used by default if you omit `adapters` entirely)
+already reads `window`/`navigator`/`document` directly, so most browser and
+webview hosts need no adapter of their own at all.
+
+---
+
 ## React Native
 
 The provider, hooks and core are shared. Two things differ.

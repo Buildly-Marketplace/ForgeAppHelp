@@ -25,6 +25,10 @@
     "./react-native": {
       "types": "./dist/react-native/index.d.ts",
       "default": "./dist/react-native/index.js"
+    },
+    "./vanilla": {
+      "types": "./dist/vanilla/index.d.ts",
+      "default": "./dist/vanilla/index.js"
     }
   },
   "files": [
@@ -85,6 +89,7 @@
     "error-tracking",
     "react",
     "react-native",
+    "vanilla-js",
     "support"
   ]
 }
